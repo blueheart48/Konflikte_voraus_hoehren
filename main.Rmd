@@ -1,0 +1,948 @@
+---
+title: "DJ FS2023 - Blogbeitrag FS 2023"
+author: "Roger Megert"
+date: ""
+output:
+  pdf_document:
+    number_sections: yes
+    template: null
+    fig_caption: yes
+  html_document:
+    df_print: paged
+subtitle: "Homework II"
+font-size: 12pt
+linestretch: 1.5
+geometry: left=2.5cm,right=2.5cm,top=3cm,bottom=3cm
+header-includes:
+- \usepackage{float}
+- \floatplacement{figure}{H}
+- \floatplacement{table}{H}
+- \usepackage{fancyhdr}
+- \pagestyle{headings}
+- \usepackage[german]{babel}
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+# Set Up
+
+```{r}
+#install.packages("quanteda")
+#install.packages("quanteda.textmodels")
+#install.packages("quanteda.textstats")
+#install.packages("quanteda.textplots")
+
+#install.packages("devtools")
+#devtools::install_github("quanteda/quanteda.corpora")
+
+
+#install.packages("readtext")
+
+
+#install.packages("newsmap")
+#install.packages("seededlda")
+```
+
+\
+Was ich alles brauche:
+
+```{r}
+require(quanteda)
+require(quanteda.textmodels)
+require(quanteda.textstats)
+require(quanteda.textplots)
+require(readtext)
+require(devtools)
+require(quanteda.corpora)
+require(newsmap)
+require(seededlda)
+require(readxl)
+library(ggplot2)
+library(tidyverse)
+```
+
+# 
+
+# Daten laden
+
+## Russland
+
+```{r}
+df.00.RUS <- readtext( "Daten/RUS/*.pdf", 
+                      docvarsfrom = "filenames", 
+                      #docvarnames = c("document", "language"),
+                      sep = "_")
+
+```
+
+### corpus
+
+```{r}
+c.00.RUS <- corpus(df.00.RUS, text_field = "text")
+print(c.00.RUS)
+
+datum = c("21.02.2023","21.04.2021","15.01.2020","20.02.2019","01.03.2018",
+          "01.12.2016","03.12.2015","04.12.2014","12.12.2013","12.12.2012",
+         "22.12.2011","30.11.2010","12.11.2009","05.11.2008","26.04.2007",
+         "10.05.2006","25.04.2005","26.05.2004","16.05.2003","18.04.2002",
+         "03.04.2001","08.07.2000")
+datum = as.Date.character(datum,"%d.%m.%Y")
+datum = rev(datum)
+
+
+president = c("Putin","Putin","Putin","Putin","Putin","Putin","Putin",
+              "Putin","Putin","Putin","Medvedev", "Medvedev","Medvedev",
+              "Medvedev","Putin","Putin","Putin","Putin","Putin",
+              "Putin","Putin","Putin")
+president = rev(president)
+
+docvars(c.00.RUS, field = "Datum")=datum
+docvars(c.00.RUS, field = "President")=president
+
+head(docvars(c.00.RUS))
+
+
+```
+
+### Tokens
+
+```{r}
+t00.RUS = tokens(c.00.RUS, 
+                 remove_punct = TRUE,
+                 remove_numbers = T, 
+                 remove_symbols = T)
+
+#delete stop words: 
+t00.RUS <- tokens_remove(t00.RUS, pattern = stopwords("en"))
+
+t00.RUS <- tokens_tolower(t00.RUS)
+
+t00.RUS <- tokens_wordstem(t00.RUS, language = "en")
+
+
+n.rus= data.frame(ntoken(t00.RUS))
+
+#Falls Zeit das noch integrieren: 
+#tokens_compound() eventuel das noch brauchen 
+#textstat_collocations(t00.RUS)
+```
+
+## USA
+
+### Corpus
+
+```{r}
+c00.USA <- corpus(data_corpus_sotu)
+c00.USA
+docvars(c00.USA)
+
+c01.USA.sub=corpus_subset(data_corpus_sotu, Date > "1985-01-01")
+df00.usa.meta=docvars(c01.USA.sub)
+
+
+
+datum_chrieg = c("1989-12-12",#Panama
+                 "1990-08-02",#Glofkrieg
+                 "1995-08-30",#Bosnien
+                 "1999-03-24",#Kosovo
+                 "2001-10-07",#Afghanistan
+                 "2003-03-20",#back to Irak
+                 "2007-01-07",#back to Somalia
+                 "2014-09-22")#Syrien
+datum_chrieg = as.Date(datum_chrieg)
+
+```
+
+### tokens
+
+```{r}
+t00.USA = tokens(c01.USA.sub, 
+                 remove_punct = TRUE,
+                 remove_numbers = T, 
+                 remove_symbols = T)
+
+#delete stop words: 
+t00.USA <- tokens_remove(t00.USA, pattern = stopwords("en"))
+
+t00.USA <- tokens_tolower(t00.USA)
+
+t00.USA <- tokens_wordstem(t00.USA, language = "en")
+
+
+
+n.usa= data.frame(ntoken(t00.USA))
+```
+
+# Analyse
+
+## Eigener Dictionaer
+
+### Russland
+
+```{r}
+#Erstellen Dict
+words_russia = c("russia*", "internal", "home", "us", "we", "citizens")
+words_russia_others = c("international", "others", "foreign", "america", "europe", "world", "external", "affairs", "they", "them" )
+
+dict00.RUS <- dictionary(list(Identifikation = words_russia,
+                              Abgrenzung = words_russia_others))
+
+t01.RUS.dict <- tokens_lookup(t00.RUS, dictionary = dict00.RUS)
+df01.RUS.dic=data.frame(dfm(t01.RUS.dict))
+
+df01.RUS.dic$datum = datum
+df01.RUS.dic$president = president
+
+df01.RUS.dic$n = n.rus$ntoken.t00.RUS.
+
+
+
+df01.RUS.dic.w <- gather(df01.RUS.dic, dict, measurement, identifikation:abgrenzung, factor_key=TRUE)
+
+df01.RUS.dic.w$p_measurement = df01.RUS.dic.w$measurement/df01.RUS.dic.w$n
+
+x = df01.RUS.dic.w %>% filter(dict == "identifikation")
+mean.russia = mean(x$p_measurement)
+x = df01.RUS.dic.w %>% filter(dict == "abgrenzung")
+mean.others = mean(x$p_measurement)
+rm(x)
+```
+
+```{r}
+df01.RUS.dic.w$dictionary = df01.RUS.dic.w$dict
+
+
+ggplot(df01.RUS.dic.w, aes(x = datum, y = p_measurement)) + 
+  geom_line(aes(color =dictionary))+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), 
+             linetype="dashed",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), 
+             linetype="solid", 
+             color = "blue", size=1)+
+      geom_hline(yintercept=mean.russia, 
+               linetype="dashed", 
+               color = "red")+
+      geom_hline(yintercept=mean.others, 
+               linetype="dashed", 
+               color = "blue")+
+  scale_colour_manual(values = c("red", "blue"))+
+  theme_bw()+
+  labs(title="Russland: Identifikation & Abgrenzung",
+        x ="Jahre", y = "Gewichtung")
+```
+
+### USA
+
+```{r}
+words_usa = c("america", "untied states",  "internal", "home", "us", "we", "citizens", "dangerous","uncert*" )
+words_usa_others = c("international", "others", "foreign", "russia", "europe", "world", "external", "affairs", "they", "them" )
+
+dict00.USA <- dictionary(list(identifikation = words_usa,
+                              abgrenzung = words_usa_others))
+
+t01.USA.dict <- tokens_lookup(t00.USA, dictionary = dict00.USA)
+df01.USA.dict=data.frame(dfm(t01.USA.dict))
+
+
+df01.USA.dict$datum = df00.usa.meta$Date
+
+df01.USA.dict$n = n.usa$ntoken.t00.USA.
+
+
+df01.USA.dict.w <- gather(df01.USA.dict, dict, measurement, identifikation:abgrenzung, factor_key=TRUE)
+
+
+df01.USA.dict.w$p_measurement = df01.USA.dict.w$measurement/df01.USA.dict.w$n
+x = df01.USA.dict.w %>% filter(dict == "identifikation")
+mean.russia = mean(x$p_measurement)
+x = df01.USA.dict.w %>% filter(dict == "abgrenzung")
+mean.others = mean(x$p_measurement)
+
+
+df01.USA.dict.w$dictionary = df01.USA.dict.w$dict
+ggplot(df01.USA.dict.w, aes(x = datum, y = p_measurement)) + 
+  geom_line(aes(color =dictionary))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+        geom_hline(yintercept=mean.russia, 
+               linetype="dashed", 
+               color = "red")+
+      geom_hline(yintercept=mean.others, 
+               linetype="dashed", 
+               color = "blue")+
+  scale_colour_manual(values = c("red", "blue"))+
+  theme_bw()+
+  labs(title="USA: Identifikation & Abgrenzung",
+        x ="Jahre", y = "Gewichtung")
+
+```
+
+## Diktionär Länder
+
+### RUS
+
+```{r}
+
+dict_newsmap <- data_dictionary_newsmap_en
+
+t01.RUS_Staaten <- tokens_lookup(t00.RUS, dictionary = dict_newsmap, levels = 3)
+df01.RUS_Staaten <- data.frame(dfm(t01.RUS_Staaten))
+
+
+row.names(df01.RUS_Staaten) = df01.RUS_Staaten$doc_id
+df01.RUS_Staaten=df01.RUS_Staaten[,-1]
+
+df01.RUS_Staaten$sum = rowSums(df01.RUS_Staaten)
+
+df02.RUS = data.frame(datum = datum)
+df02.RUS$identifikation = df01.RUS_Staaten$ru
+df02.RUS$abgrenzung = df01.RUS_Staaten$sum-df01.RUS_Staaten$ru
+
+
+
+n= data.frame(ntoken(t00.RUS))
+df02.RUS$n = n$ntoken.t00.RUS.
+df02.RUS$president = president
+
+df02.RUS.w <- gather(df02.RUS, in_out, measurement, abgrenzung:identifikation, factor_key=TRUE)
+df02.RUS.w$p_measurement = df02.RUS.w$measurement/df02.RUS.w$n
+
+x = df02.RUS.w %>% filter(in_out == "identifikation")
+mean.russia = mean(x$p_measurement)
+x = df02.RUS.w %>% filter(in_out == "abgrenzung")
+mean.others = mean(x$p_measurement)
+
+df02.RUS.w$Staaten = df02.RUS.w$in_out
+ggplot(df02.RUS.w, aes(x = datum, y = p_measurement)) + 
+  geom_line(aes(color = Staaten))+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), linetype="dashed", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), linetype="dashed", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+    geom_hline(yintercept=mean.russia, 
+               linetype="dashed", 
+               color = "red")+
+      geom_hline(yintercept=mean.others, 
+               linetype="dashed", 
+               color = "blue")+
+  theme_bw()+
+  scale_colour_manual(values = c("blue", "red"))+
+    labs(title="Russland: Identifikation & Abgrenzung",
+        x ="Jahre", y = "Gewichtung")
+
+rm(df01.RUS_Staaten,df01.RUS_Staaten_w,n)
+```
+
+### USA
+
+```{r}
+dict_newsmap <- data_dictionary_newsmap_en
+
+t01.USA_Staaten <- tokens_lookup(t00.USA, dictionary = dict_newsmap, levels = 3)
+df01.USA_Staaten <- data.frame(dfm(t01.USA_Staaten))
+row.names(df01.USA_Staaten) = df01.USA_Staaten$doc_id
+df01.USA_Staaten=df01.USA_Staaten[,-1]
+
+df01.USA_Staaten$sum = rowSums(df01.USA_Staaten)
+
+df02.USA = df00.usa.meta
+df02.USA$others = df01.USA_Staaten$sum-df01.USA_Staaten$us
+df02.USA$us = df01.USA_Staaten$us
+df02.USA$n = n.usa$ntoken.t00.USA.
+
+df02.USA= df02.USA %>% select(Date, others, us, n)
+
+
+df02.USA.w <- gather(df02.USA, in_out, measurement, others:us, factor_key=TRUE)
+
+df02.USA.w$p_measurement = df02.USA.w$measurement/df02.USA.w$n
+
+x = df02.USA.w %>% filter(in_out == "others")
+mean.russia = mean(x$p_measurement)
+x = df02.USA.w %>% filter(in_out == "us")
+mean.others = mean(x$p_measurement)
+
+df02.USA.w$Staaten = df02.USA.w$in_out
+
+ggplot(df02.USA.w, aes(x = Date, y = p_measurement)) + 
+  geom_line(aes(color = Staaten))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+          geom_hline(yintercept=mean.russia, 
+               linetype="dashed", 
+               color = "red")+
+      geom_hline(yintercept=mean.others, 
+               linetype="dashed", 
+               color = "blue")+
+  scale_colour_manual(values = c("red", "blue"))+
+  theme_bw()+
+        labs(title="USA: Identifikation & Abgrenzung",
+        x ="Jahre", y = "Gewichtung")
+
+```
+
+## Themen
+
+### Russland
+
+```{r}
+#Erstellen Dict
+words_war = c("war", "conflict", "threat", "aggression", "defend", "danger*", "surviv*", "dangerous","uncert*")
+dict00.RUS <- dictionary(list(Thema = words_war))
+
+t01.RUS.dict <- tokens_lookup(t00.RUS, dictionary = dict00.RUS)
+df01.RUS.dic=data.frame(dfm(t01.RUS.dict))
+
+df01.RUS.dic$datum = datum
+df01.RUS.dic$president = president
+n= data.frame(ntoken(t00.RUS))
+df01.RUS.dic$n = n.rus$ntoken.t00.RUS.
+
+
+
+df01.RUS.dic$p_measurement = df01.RUS.dic$thema/df01.RUS.dic$n
+
+ggplot(df01.RUS.dic, aes(x = datum, y = p_measurement)) + 
+  geom_line()+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), 
+             linetype="dashed",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  theme_bw()+
+  labs(title="Russland: Thema",
+        x ="Jahre", y = "Gewichtung")
+
+
+```
+
+#### Russland - Kontext
+
+```{r}
+
+#Extract the words around 
+  
+tXX.reduced =  tokens_select(t00.RUS, words_war, selection = "keep", window = 20)
+
+#GIBT NOCH Neg Positiv & pos Negativ
+data_dictionary_LSD2015_pos_neg <- data_dictionary_LSD2015[1:2]
+
+kw <- tokens_lookup(tXX.reduced, dictionary = data_dictionary_LSD2015_pos_neg)
+dfm_kw <- data.frame(dfm(kw))
+
+n= data.frame(ntoken(t00.RUS))
+dfm_kw$n = n$ntoken.t00.RUS.
+dfm_kw$datum = datum
+dfm_kw$president = president
+
+
+dfm_kw_w <- gather(dfm_kw, pos_neg, measurement, negative:positive, factor_key=TRUE)
+
+dfm_kw_w$p_mesurment = dfm_kw_w$measurement/dfm_kw_w$n
+
+ggplot(data=dfm_kw_w, aes(x=datum, y=p_mesurment)) +
+  geom_line(aes(color = pos_neg))+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), 
+             linetype="dashed",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  theme_bw()+
+    labs(title="Russland: Kontext vom Thema",
+        x ="Jahre", y = "Gewichtung")
+
+
+```
+
+### USA
+
+```{r}
+words_war = c("war", "conflict", "threat", "aggression", "defend", "danger*", "surviv*")
+dict00.USA <- dictionary(list(Thema = words_war))
+
+t01.USA.dict <- tokens_lookup(t00.USA, dictionary = dict00.USA)
+df01.USA.dict=data.frame(dfm(t01.USA.dict))
+
+
+df01.USA.dict$datum = df00.usa.meta$Date
+
+df01.USA.dict$n = n.usa$ntoken.t00.USA.
+
+
+df01.USA.dict$p_measurement = df01.USA.dict$thema/df01.USA.dict$n
+
+
+ggplot(df01.USA.dict, aes(x = datum, y = p_measurement)) + 
+  geom_line()+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  theme_bw()+
+        labs(title="USA: Thema",
+        x ="Jahre", y = "Gewichtung")
+```
+
+#### USA - Kontext
+
+```{r}
+
+#Extract the words around 
+tXX.reduced =  tokens_select(t00.USA, words_war, selection = "keep", window = 20)
+
+#GIBT NOCH Neg Positiv & pos Negativ
+data_dictionary_LSD2015_pos_neg <- data_dictionary_LSD2015[1:2]
+
+kw <- tokens_lookup(tXX.reduced, dictionary = data_dictionary_LSD2015_pos_neg)
+dfm_kw <- data.frame(dfm(kw))
+
+dfm_kw$datum = df00.usa.meta$Date
+dfm_kw$n = n.usa$ntoken.t00.USA.
+
+
+
+
+dfm_kw_w <- gather(dfm_kw, pos_neg, measurement, negative:positive, factor_key=TRUE)
+
+dfm_kw_w$p_measurement = dfm_kw_w$measurement/dfm_kw_w$n
+
+ggplot(data=dfm_kw_w, aes(x=datum, y=p_measurement)) +
+  geom_line(aes(color = pos_neg))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  theme_bw()+
+      labs(title="USA: Kontext vom Thema",
+        x ="Jahre", y = "Gewichtung")
+
+
+```
+
+## Politischer Dictionary
+
+### RUS
+
+```{r}
+dfm00.RUS <- dfm(t00.RUS)
+
+dict_lg <- dictionary(file = "laverGarry.cat", encoding = "UTF-8")
+
+dfm01.RUS_pol <- dfm_lookup(dfm00.RUS, dictionary = dict_lg, levels = 1)
+dfm01.RUS_pol = data.frame(dfm01.RUS_pol)
+
+dfm01.RUS_pol$datum = datum
+dfm01.RUS_pol$president = president
+
+n= data.frame(ntoken(t00.RUS))
+dfm01.RUS_pol$n = n$ntoken.t00.RUS
+
+dfm01.RUS_pol_w <- gather(dfm01.RUS_pol, politic_topic, measurement, CULTURE:VALUES, factor_key=TRUE)
+dfm01.RUS_pol_w$p_mesur = dfm01.RUS_pol_w$measurement/dfm01.RUS_pol_w$n
+
+
+
+ggplot(dfm01.RUS_pol_w, aes(x = datum, y = p_mesur)) + 
+  geom_line(aes(color = politic_topic))+
+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  theme_bw()
+
+df.test=as.data.frame(dfmat_irish_lg[, "LAW_AND_ORDER"])
+```
+
+### USA
+
+```{r}
+dfm00.USA <- dfm(t00.USA)
+
+dict_lg <- dictionary(file = "laverGarry.cat", encoding = "UTF-8")
+
+dfm01.USA_pol <- dfm_lookup(dfm00.USA, dictionary = dict_lg, levels = 1)
+dfm01.USA_pol = data.frame(dfm01.USA_pol)
+
+dfm01.USA_pol$datum = df00.usa.meta$Date
+dfm01.USA_pol$n = n$ntoken.t00.USA.
+
+
+dfm01.USA_pol.w <- gather(dfm01.USA_pol, politic_topic, measurement, CULTURE:VALUES, factor_key=TRUE)
+dfm01.USA_pol.w$p_measurement = dfm01.USA_pol.w$measurement/dfm01.USA_pol.w$n
+
+
+
+ggplot(dfm01.USA_pol.w, aes(x = datum, y = p_measurement)) + 
+  geom_line(aes(color = politic_topic))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  theme_bw()
+```
+
+## Sentiment
+
+### Rusland
+
+```{r}
+library(syuzhet)
+nrc <- get_sentiment(t00.RUS, method="nrc")
+emotions <- get_nrc_sentiment(c.00.RUS)
+
+n= data.frame(ntoken(t00.RUS))
+emotions$n = n$ntoken.t00.RUS.
+emotions$datum = datum
+emotions$president = president
+emotions = emotions[-9]
+emotions = emotions[-9]
+
+emotions_w <- gather(emotions, emotion, measurement, anger:trust, factor_key=TRUE)
+
+emotions_w$p_mesurment = emotions_w$measurement/emotions_w$n
+
+emotions_w$emotions = emotions_w$emotion
+ggplot(data=emotions_w, aes(x=datum, y=p_mesurment, group=emotions)) +
+  geom_line(aes(color=emotions))+
+  scale_color_manual(values=c("red", "grey", "red","red","green","red", "grey", "grey"))+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), linetype="dashed", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), linetype="dashed", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  theme_bw()+
+
+  labs(title="Russland: Emotionen",
+        x ="Jahre", y = "Gewichtung")
+```
+
+### USA
+
+```{r}
+library(syuzhet)
+nrc <- get_sentiment(t00.USA, method="nrc")
+emotions <- get_nrc_sentiment(c01.USA.sub)
+
+
+emotions$n = n.usa$ntoken.t00.USA.
+emotions$datum = df00.usa.meta$Date
+emotions = emotions[-9]
+emotions = emotions[-9]
+
+
+
+emotions_w <- gather(emotions, emotion, measurement, anger:trust, factor_key=TRUE)
+
+emotions_w$p_measurement = emotions_w$measurement/emotions_w$n
+
+
+ggplot(data=emotions_w, aes(x=datum, y=p_measurement, group=emotion)) +
+  geom_line(aes(color=emotion))+
+  scale_color_manual(values=c("red", "grey", "grey","gold","green","black", "grey", "blue"))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+  theme_bw()+
+  
+    labs(title="Russland: Emotionen",
+        x ="Jahre", y = "Gewichtung")
+```
+
+## Lexical diversity
+
+### Rusland
+
+```{r}
+tstat_lexdiv <- textstat_lexdiv(dfm(t00.RUS))
+
+tstat_lexdiv$datum = datum
+tstat_lexdiv$president = president
+
+ggplot(tstat_lexdiv, aes(x = datum, y = TTR)) + 
+  geom_line()+
+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  theme_bw()
+```
+
+### USA
+
+```{r}
+tstat_lexdiv <- textstat_lexdiv(dfm(t00.USA))
+
+tstat_lexdiv$datum = df00.usa.meta$Date
+
+mean.ttr = mean(tstat_lexdiv$TTR)
+ggplot(tstat_lexdiv, aes(x = datum, y = TTR)) + 
+  geom_line()+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="dashed", 
+             color = "blue", size=1)+
+      geom_hline(yintercept=mean.ttr, 
+               linetype="dashed", 
+               color = "red")+
+  theme_bw()
+
+```
+
+## Similarity
+
+### Rusland
+
+```{r}
+m = as.matrix(textstat_simil(dfm(t00.RUS)))
+m
+m.max = 22
+vec = c(0:(m.max-1))
+for(ci in 1:(m.max-1)){
+  vec[ci+1] = m[(ci+1), ci]
+}
+
+df03.sim = data.frame(sim = vec)
+
+df03.sim$datum = datum
+df03.sim$dif = 1-df03.sim$sim
+df03.sim = df03.sim[-1,]
+
+dif.mean = mean(df03.sim$dif)
+
+
+ggplot(df03.sim, aes(x = datum, y = dif)) + 
+  geom_line()+
+  geom_point()+
+  geom_vline(xintercept = as.Date.character("07.08.2008","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("18.03.2014","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+  geom_vline(xintercept = as.Date.character("24.02.2022","%d.%m.%Y"), linetype="solid", 
+            color = "blue", size=1)+
+    geom_hline(yintercept=dif.mean, 
+               linetype="dashed", 
+               color = "red")+
+
+  theme_bw()
+
+
+```
+
+### USA
+
+```{r}
+m = as.matrix(textstat_simil(dfm(t00.USA)))
+m
+m.max = 36
+vec = c(0:(m.max-1))
+for(ci in 1:(m.max-1)){
+  vec[ci+1] = m[(ci+1), ci]
+}
+
+df03.sim = data.frame(sim = vec)
+df03.sim$datum = df00.usa.meta$Date
+df03.sim$president = df00.usa.meta$President
+df03.sim$dif = 1-df03.sim$sim
+df03.sim = df03.sim[-1,]
+
+dif.mean = mean(df03.sim$dif)
+
+
+ggplot(df03.sim, aes(x = datum, y = dif)) + 
+  geom_line()+
+  geom_point(aes(color = president))+
+    geom_vline(xintercept = as.Date(datum_chrieg[1]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[2]), 
+             linetype="solid",            
+             color = "blue", size=1)+
+  geom_vline(xintercept = as.Date(datum_chrieg[3]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[4]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[5]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[6]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[7]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[8]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[9]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_vline(xintercept = as.Date(datum_chrieg[10]), 
+             linetype="solid", 
+             color = "blue", size=1)+
+    geom_hline(yintercept=dif.mean, 
+               linetype="dashed", 
+               color = "red")+
+
+  theme_bw()
+
+```
